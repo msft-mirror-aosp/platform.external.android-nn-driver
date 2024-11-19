@@ -233,8 +233,7 @@ Return<V1_0::ErrorStatus> ArmnnDriverImpl::prepareArmnnModel_1_2(
     // Load it into the runtime.
     armnn::NetworkId netId = 0;
     std::string msg;
-    armnn::INetworkProperties networkProperties(options.isAsyncModelExecutionEnabled(),
-                                                MemorySource::Undefined,
+    armnn::INetworkProperties networkProperties(MemorySource::Undefined,
                                                 MemorySource::Undefined,
                                                 options.IsGpuProfilingEnabled());
 
@@ -269,8 +268,6 @@ Return<V1_0::ErrorStatus> ArmnnDriverImpl::prepareArmnnModel_1_2(
                     model,
                     options.GetRequestInputsAndOutputsDumpDir(),
                     options.IsGpuProfilingEnabled(),
-                    options.isAsyncModelExecutionEnabled(),
-                    options.getNoOfArmnnThreads(),
                     options.isImportEnabled(),
                     options.isExportEnabled()));
 
@@ -612,8 +609,7 @@ Return<V1_0::ErrorStatus> ArmnnDriverImpl::prepareModelFromCache(
     // Load it into the runtime.
     armnn::NetworkId netId = 0;
     std::string msg;
-    armnn::INetworkProperties networkProperties(options.isAsyncModelExecutionEnabled(),
-                                                MemorySource::Undefined,
+    armnn::INetworkProperties networkProperties(MemorySource::Undefined,
                                                 MemorySource::Undefined,
                                                 options.IsGpuProfilingEnabled());
 
@@ -638,8 +634,6 @@ Return<V1_0::ErrorStatus> ArmnnDriverImpl::prepareModelFromCache(
                     runtime.get(),
                     options.GetRequestInputsAndOutputsDumpDir(),
                     options.IsGpuProfilingEnabled(),
-                    options.isAsyncModelExecutionEnabled(),
-                    options.getNoOfArmnnThreads(),
                     options.isImportEnabled(),
                     options.isExportEnabled(),
                     true));

@@ -40,8 +40,6 @@ public:
     const std::string& GetCachedNetworkFilePath() const { return m_CachedNetworkFilePath; }
     bool SaveCachedNetwork() const { return m_SaveCachedNetwork; }
     unsigned int GetNumberOfThreads() const { return m_NumberOfThreads; }
-    bool isAsyncModelExecutionEnabled() const { return m_EnableAsyncModelExecution; };
-    unsigned int getNoOfArmnnThreads() const { return m_ArmnnNumberOfThreads; };
     bool isImportEnabled() const { return m_EnableImport; };
     bool isExportEnabled() const { return m_EnableExport; };
 
@@ -63,8 +61,6 @@ private:
     std::string m_CachedNetworkFilePath;
     bool m_SaveCachedNetwork;
     unsigned int m_NumberOfThreads;
-    bool m_EnableAsyncModelExecution;
-    unsigned int m_ArmnnNumberOfThreads;
     bool m_EnableImport;
     bool m_EnableExport;
 };

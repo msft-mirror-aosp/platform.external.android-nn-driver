@@ -171,8 +171,7 @@ Return<V1_0::ErrorStatus> ArmnnDriverImpl<HalPolicy>::prepareModel(
     // Load it into the runtime.
     armnn::NetworkId netId = 0;
     std::string msg;
-    armnn::INetworkProperties networkProperties(options.isAsyncModelExecutionEnabled(),
-                                                armnn::MemorySource::Undefined,
+    armnn::INetworkProperties networkProperties(armnn::MemorySource::Undefined,
                                                 armnn::MemorySource::Undefined);
 
     try
@@ -204,8 +203,6 @@ Return<V1_0::ErrorStatus> ArmnnDriverImpl<HalPolicy>::prepareModel(
                     model,
                     options.GetRequestInputsAndOutputsDumpDir(),
                     options.IsGpuProfilingEnabled(),
-                    options.isAsyncModelExecutionEnabled(),
-                    options.getNoOfArmnnThreads(),
                     options.isImportEnabled(),
                     options.isExportEnabled()));
 

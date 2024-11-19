@@ -148,9 +148,6 @@ RequestThread_1_3<ArmnnPreparedModel_1_3, HalVersion, CallbackContext_1_3>
         ArmnnPreparedModel_1_3<HalVersion>::m_RequestThread;
 
 template<typename HalVersion>
-std::unique_ptr<armnn::Threadpool> ArmnnPreparedModel_1_3<HalVersion>::m_Threadpool(nullptr);
-
-template<typename HalVersion>
 template<typename TensorBindingCollection>
 void ArmnnPreparedModel_1_3<HalVersion>::DumpTensorsIfRequired(char const* tensorNamePrefix,
                                                                const TensorBindingCollection& tensorBindings)
@@ -175,8 +172,6 @@ ArmnnPreparedModel_1_3<HalVersion>::ArmnnPreparedModel_1_3(armnn::NetworkId netw
                                                            const std::string& requestInputsAndOutputsDumpDir,
                                                            const bool gpuProfilingEnabled,
                                                            V1_3::Priority priority,
-                                                           const bool asyncModelExecutionEnabled,
-                                                           const unsigned int numberOfThreads,
                                                            const bool importEnabled,
                                                            const bool exportEnabled)
     : m_NetworkId(networkId)
@@ -186,33 +181,12 @@ ArmnnPreparedModel_1_3<HalVersion>::ArmnnPreparedModel_1_3(armnn::NetworkId netw
     , m_RequestInputsAndOutputsDumpDir(requestInputsAndOutputsDumpDir)
     , m_GpuProfilingEnabled(gpuProfilingEnabled)
     , m_ModelPriority(priority)
-    , m_AsyncModelExecutionEnabled(asyncModelExecutionEnabled)
     , m_EnableImport(importEnabled)
     , m_EnableExport(exportEnabled)
     , m_PreparedFromCache(false)
 {
     // Enable profiling if required.
     m_Runtime->GetProfiler(m_NetworkId)->EnableProfiling(m_GpuProfilingEnabled);
-
-    if (m_AsyncModelExecutionEnabled)
-    {
-        std::vector<std::shared_ptr<armnn::IWorkingMemHandle>> memHandles;
-        for (unsigned int i=0; i < numberOfThreads; ++i)
-        {
-            memHandles.emplace_back(m_Runtime->CreateWorkingMemHandle(networkId));
-        }
-
-        if (!m_Threadpool)
-        {
-            m_Threadpool = std::make_unique<armnn::Threadpool>(numberOfThreads, runtime, memHandles);
-        }
-        else
-        {
-            m_Threadpool->LoadMemHandles(memHandles);
-        }
-
-        m_WorkingMemHandle = memHandles.back();
-    }
 }
 
 template<typename HalVersion>
@@ -221,8 +195,6 @@ ArmnnPreparedModel_1_3<HalVersion>::ArmnnPreparedModel_1_3(armnn::NetworkId netw
                                                            const std::string& requestInputsAndOutputsDumpDir,
                                                            const bool gpuProfilingEnabled,
                                                            V1_3::Priority priority,
-                                                           const bool asyncModelExecutionEnabled,
-                                                           const unsigned int numberOfThreads,
                                                            const bool importEnabled,
                                                            const bool exportEnabled,
                                                            const bool preparedFromCache)
@@ -232,33 +204,12 @@ ArmnnPreparedModel_1_3<HalVersion>::ArmnnPreparedModel_1_3(armnn::NetworkId netw
     , m_RequestInputsAndOutputsDumpDir(requestInputsAndOutputsDumpDir)
     , m_GpuProfilingEnabled(gpuProfilingEnabled)
     , m_ModelPriority(priority)
-    , m_AsyncModelExecutionEnabled(asyncModelExecutionEnabled)
     , m_EnableImport(importEnabled)
     , m_EnableExport(exportEnabled)
     , m_PreparedFromCache(preparedFromCache)
 {
     // Enable profiling if required.
     m_Runtime->GetProfiler(m_NetworkId)->EnableProfiling(m_GpuProfilingEnabled);
-
-    if (m_AsyncModelExecutionEnabled)
-    {
-        std::vector<std::shared_ptr<armnn::IWorkingMemHandle>> memHandles;
-        for (unsigned int i=0; i < numberOfThreads; ++i)
-        {
-            memHandles.emplace_back(m_Runtime->CreateWorkingMemHandle(networkId));
-        }
-
-        if (!m_Threadpool)
-        {
-            m_Threadpool = std::make_unique<armnn::Threadpool>(numberOfThreads, runtime, memHandles);
-        }
-        else
-        {
-            m_Threadpool->LoadMemHandles(memHandles);
-        }
-
-        m_WorkingMemHandle = memHandles.back();
-    }
 }
 
 template<typename HalVersion>
@@ -275,12 +226,6 @@ ArmnnPreparedModel_1_3<HalVersion>::~ArmnnPreparedModel_1_3()
 
     // Unload the network associated with this model.
     m_Runtime->UnloadNetwork(m_NetworkId);
-
-    // Unload the network memhandles from the threadpool
-    if (m_AsyncModelExecutionEnabled)
-    {
-        m_Threadpool->UnloadMemHandles(m_NetworkId);
-    }
 }
 
 template<typename HalVersion>
@@ -863,30 +808,21 @@ Return <V1_3::ErrorStatus> ArmnnPreparedModel_1_3<HalVersion>::ExecuteGraph(
             cb.ctx.deviceStart = Now();
         }
         armnn::Status status;
-        if (m_AsyncModelExecutionEnabled)
+
+        // Create a vector of Input and Output Ids which can be imported. An empty vector means all will be copied.
+        std::vector<armnn::ImportedInputId> importedInputIds;
+        if (m_EnableImport)
         {
-ARMNN_NO_DEPRECATE_WARN_BEGIN
-            ALOGW("ArmnnPreparedModel_1_3::ExecuteGraph m_AsyncModelExecutionEnabled true");
-            status = m_Runtime->Execute(*m_WorkingMemHandle, inputTensors, outputTensors);
-ARMNN_NO_DEPRECATE_WARN_BEGIN
+            importedInputIds =  m_Runtime->ImportInputs(m_NetworkId, inputTensors, armnn::MemorySource::Malloc);
         }
-        else
+        std::vector<armnn::ImportedOutputId> importedOutputIds;
+        if (m_EnableExport)
         {
-            ALOGW("ArmnnPreparedModel_1_3::ExecuteGraph m_AsyncModelExecutionEnabled false");
-            // Create a vector of Input and Output Ids which can be imported. An empty vector means all will be copied.
-            std::vector<armnn::ImportedInputId> importedInputIds;
-            if (m_EnableImport)
-            {
-                importedInputIds =  m_Runtime->ImportInputs(m_NetworkId, inputTensors, armnn::MemorySource::Malloc);
-            }
-            std::vector<armnn::ImportedOutputId> importedOutputIds;
-            if (m_EnableExport)
-            {
-                importedOutputIds = m_Runtime->ImportOutputs(m_NetworkId, outputTensors, armnn::MemorySource::Malloc);
-            }
-            status = m_Runtime->EnqueueWorkload(m_NetworkId, inputTensors, outputTensors,
-                                                importedInputIds, importedOutputIds);
+            importedOutputIds = m_Runtime->ImportOutputs(m_NetworkId, outputTensors, armnn::MemorySource::Malloc);
         }
+        status = m_Runtime->EnqueueWorkload(m_NetworkId, inputTensors, outputTensors,
+                                            importedInputIds, importedOutputIds);
+
 
         if (cb.ctx.measureTimings == V1_2::MeasureTiming::YES)
         {
@@ -935,47 +871,6 @@ ARMNN_NO_DEPRECATE_WARN_BEGIN
           std::chrono::duration_cast<std::chrono::microseconds>
           (std::chrono::system_clock::now() - graphExecutionStart).count());
     return V1_3::ErrorStatus::NONE;
-}
-
-/// Schedule the graph prepared from the request for execution
-template<typename HalVersion>
-template<typename CallbackContext>
-void ArmnnPreparedModel_1_3<HalVersion>::ScheduleGraphForExecution(
-        std::shared_ptr<std::vector<::android::nn::RunTimePoolInfo>>& pMemPools,
-        std::shared_ptr<armnn::InputTensors>& inputTensors,
-        std::shared_ptr<armnn::OutputTensors>& outputTensors,
-        CallbackContext callbackContext,
-        armnn::QosExecPriority priority)
-{
-    ALOGV("ArmnnPreparedModel_1_3::ScheduleGraphForExecution(...)");
-
-    DumpTensorsIfRequired("Input", *inputTensors);
-
-    unsigned int outputTensorSize = outputTensors.get()->size();
-    std::vector<V1_2::OutputShape> outputShapes(outputTensorSize);
-    for (unsigned int i = 0; i < outputTensorSize; i++)
-    {
-        std::pair<int, armnn::Tensor> outputTensorPair = outputTensors.get()->at(i);
-        const armnn::Tensor outputTensor = outputTensorPair.second;
-        const armnn::TensorInfo outputTensorInfo = outputTensor.GetInfo();
-
-        outputShapes[i] = ComputeShape(outputTensorInfo);
-    }
-
-    auto tpCb = std::make_shared<
-        ArmnnThreadPoolCallback_1_3<CallbackContext_1_3>>(this,
-                                                          pMemPools,
-                                                          outputShapes,
-                                                          inputTensors,
-                                                          outputTensors,
-                                                          callbackContext);
-
-    m_Threadpool->Schedule(m_NetworkId,
-                           *tpCb->m_InputTensors,
-                           *tpCb->m_OutputTensors,
-                           priority,
-                           tpCb);
-    ALOGV("ArmnnPreparedModel_1_3::ScheduleGraphForExecution end");
 }
 
 template<typename HalVersion>
@@ -1086,32 +981,6 @@ Return <V1_3::ErrorStatus> ArmnnPreparedModel_1_3<HalVersion>::Execute(const V1_
         High   = 2
     };
 
-
-    if (m_AsyncModelExecutionEnabled)
-    {
-        armnn::QosExecPriority priority;
-
-        switch (GetModelPriority()) {
-            case V1_3::Priority::LOW:
-                priority = armnn::QosExecPriority::Low;
-                break;
-            case V1_3::Priority::MEDIUM:
-                priority = armnn::QosExecPriority::Medium;
-                break;
-            case V1_3::Priority::HIGH:
-                priority = armnn::QosExecPriority::High;
-                break;
-            default:
-                priority = armnn::QosExecPriority::Medium;
-
-        }
-
-        ALOGV("ArmnnPreparedModel_1_3::execute(...) before ScheduleGraphForExecution");
-        ScheduleGraphForExecution(memPools, inputTensors, outputTensors, cb, priority);
-        ALOGV("ArmnnPreparedModel_1_3::execute(...) after ScheduleGraphForExecution");
-        return V1_3::ErrorStatus::NONE;
-    }
-
     ALOGV("ArmnnPreparedModel_1_3::execute(...) before PostMsg");
     // post the request for asynchronous execution
     m_RequestThread.PostMsg(this, memPools, inputTensors, outputTensors, cb);
@@ -1125,46 +994,6 @@ V1_3::Priority ArmnnPreparedModel_1_3<HalVersion>::GetModelPriority()
     return m_ModelPriority;
 }
 
-template<typename HalVersion>
-template <typename CallbackContext>
-void ArmnnPreparedModel_1_3<HalVersion>::ArmnnThreadPoolCallback_1_3<CallbackContext>::Notify(
-        armnn::Status status, armnn::InferenceTimingPair timeTaken)
-{
-    ALOGV("ArmnnPreparedModel_1_3::ArmnnThreadPoolCallback_1_3<CallbackContext>::Notify");
-    CommitPools(*m_MemPools);
-
-     m_Model->DumpTensorsIfRequired("Output", *m_OutputTensors);
-
-    if (status != armnn::Status::Success)
-    {
-        ALOGW("ArmnnThreadPoolCallback_1_3::Notify EnqueueWorkload failed");
-        m_CallbackContext.callback(V1_3::ErrorStatus::GENERAL_FAILURE,
-                                   {},
-                                   g_NoTiming,
-                                   "ArmnnPreparedModel_1_3::ArmnnThreadPoolCallback_1_3");
-        return;
-    }
-
-    if (m_CallbackContext.ctx.measureTimings == V1_2::MeasureTiming::YES)
-    {
-        m_CallbackContext.ctx.deviceStart = timeTaken.first;
-        m_CallbackContext.ctx.deviceEnd = timeTaken.second;
-        m_CallbackContext.ctx.driverEnd = std::chrono::steady_clock::now();
-        V1_2::Timing timing;
-        timing.timeOnDevice = MicrosecondsDuration(m_CallbackContext.ctx.deviceEnd, m_CallbackContext.ctx.deviceStart);
-        timing.timeInDriver = MicrosecondsDuration(m_CallbackContext.ctx.driverEnd, m_CallbackContext.ctx.driverStart);
-        ALOGV("ArmnnPreparedModel_1_3::execute timing - Device = %lu Driver = %lu",
-              static_cast<unsigned long>(timing.timeOnDevice), static_cast<unsigned long>(timing.timeInDriver));
-        m_CallbackContext.callback(
-                V1_3::ErrorStatus::NONE, m_OutputShapes, timing, "ArmnnPreparedModel_1_3::ExecuteGraph");
-    } else
-    {
-        m_CallbackContext.callback(
-                V1_3::ErrorStatus::NONE, m_OutputShapes, g_NoTiming, "ArmnnPreparedModel_1_3::ExecuteGraph");
-    }
-    return;
-}
-
 #ifdef ARMNN_ANDROID_NN_V1_3
 template class ArmnnPreparedModel_1_3<hal_1_3::HalPolicy>;
 template Return <V1_3::ErrorStatus> ArmnnPreparedModel_1_3<hal_1_3::HalPolicy>::ExecuteGraph<CallbackContext_1_3>(
@@ -1172,13 +1001,6 @@ template Return <V1_3::ErrorStatus> ArmnnPreparedModel_1_3<hal_1_3::HalPolicy>::
         armnn::InputTensors& pInputTensors,
         armnn::OutputTensors& pOutputTensors,
         CallbackContext_1_3 cb);
-
-template void ArmnnPreparedModel_1_3<hal_1_3::HalPolicy>::ScheduleGraphForExecution<CallbackContext_1_3>(
-                std::shared_ptr<std::vector<::android::nn::RunTimePoolInfo>>& pMemPools,
-                std::shared_ptr<armnn::InputTensors>& inputTensors,
-                std::shared_ptr<armnn::OutputTensors>& outputTensors,
-                CallbackContext_1_3 callbackContext,
-                armnn::QosExecPriority priority);
 #endif
 
 } // namespace armnn_driver

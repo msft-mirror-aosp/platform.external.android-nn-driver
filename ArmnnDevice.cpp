@@ -98,17 +98,7 @@ ArmnnDevice::ArmnnDevice(DriverOptions options)
             }
             else
             {
-                if (m_Options.isAsyncModelExecutionEnabled() &&
-                    armnn::HasMatchingCapability(armnn::BackendOptions::BackendOption{"AsyncExecution", false},
-                                                 backend))
-                {
-                    ALOGV("ArmnnDevice: ArmNN does not support AsyncExecution with the following backend: %s",
-                          backend.Get().c_str());
-                }
-                else
-                {
-                    backends.push_back(backend);
-                }
+                backends.push_back(backend);
             }
         }
     }

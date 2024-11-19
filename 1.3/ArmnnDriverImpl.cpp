@@ -246,8 +246,7 @@ Return<V1_3::ErrorStatus> ArmnnDriverImpl::prepareArmnnModel_1_3(
     // Load it into the runtime.
     armnn::NetworkId netId = 0;
     std::string msg;
-    armnn::INetworkProperties networkProperties(options.isAsyncModelExecutionEnabled(),
-                                                MemorySource::Undefined,
+    armnn::INetworkProperties networkProperties(MemorySource::Undefined,
                                                 MemorySource::Undefined,
                                                 options.IsGpuProfilingEnabled());
 
@@ -283,8 +282,6 @@ Return<V1_3::ErrorStatus> ArmnnDriverImpl::prepareArmnnModel_1_3(
                     options.GetRequestInputsAndOutputsDumpDir(),
                     options.IsGpuProfilingEnabled(),
                     priority,
-                    options.isAsyncModelExecutionEnabled(),
-                    options.getNoOfArmnnThreads(),
                     options.isImportEnabled(),
                     options.isExportEnabled()));
 
@@ -628,8 +625,7 @@ Return<V1_3::ErrorStatus> ArmnnDriverImpl::prepareModelFromCache_1_3(
     // Load it into the runtime.
     armnn::NetworkId netId = 0;
     std::string msg;
-    armnn::INetworkProperties networkProperties(options.isAsyncModelExecutionEnabled(),
-                                                MemorySource::Undefined,
+    armnn::INetworkProperties networkProperties(MemorySource::Undefined,
                                                 MemorySource::Undefined,
                                                 options.IsGpuProfilingEnabled());
 
@@ -654,8 +650,6 @@ Return<V1_3::ErrorStatus> ArmnnDriverImpl::prepareModelFromCache_1_3(
                                                            options.GetRequestInputsAndOutputsDumpDir(),
                                                            options.IsGpuProfilingEnabled(),
                                                            V1_3::Priority::MEDIUM,
-                                                           options.isAsyncModelExecutionEnabled(),
-                                                           options.getNoOfArmnnThreads(),
                                                            options.isImportEnabled(),
                                                            options.isExportEnabled(),
                                                            true));
